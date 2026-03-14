@@ -38,21 +38,26 @@ window.MathJax = {
 
 <main class="layout">
 
-  <!-- LEFT: problem viewer -->
+  <!-- LEFT: problem/contest viewer -->
   <section class="panel panel-problem">
     <div class="search-row">
-      <input id="problemInput" class="input-mono" placeholder="Problem ID — e.g. 1213D2">
-      <button class="btn-primary" onclick="loadProblem()">Load</button>
+      <input id="problemInput" class="input-mono" placeholder="Problem ID (e.g. 1213D2) or Contest ID (e.g. 12345)">
+      <button class="btn-primary" onclick="loadInput()">Load</button>
     </div>
+
+    <!-- Contest panel — visible solo en modo contest -->
+    <div id="contestPanel" class="contest-panel hidden"></div>
+
+    <!-- Problem statement -->
     <div id="problemContainer" class="problem-area">
       <div class="empty-state">
         <div class="empty-icon">&#9633;</div>
-        <p>Enter a problem ID to get started</p>
+        <p>Enter a problem ID or VJudge contest ID to get started</p>
       </div>
     </div>
   </section>
 
-  <!-- RIGHT: submit panel with tab switcher -->
+  <!-- RIGHT: submit panel -->
   <aside class="panel panel-submit">
 
     <div class="tab-bar">
@@ -83,6 +88,7 @@ window.MathJax = {
 
     <!-- Result tab -->
     <div id="pane-result" class="tab-pane hidden">
+      <div id="submitSteps" class="submit-steps hidden"></div>
       <div id="verdictCard" class="verdict-card">
         <div class="verdict-spinner">
           <div class="spinner"></div>
@@ -107,12 +113,12 @@ window.MathJax = {
     <div class="modal-body">
       <p class="modal-desc">
         Enter your <strong>VJudge</strong> credentials. Make sure your Codeforces account
-        is linked in your VJudge settings (<a href="https://vjudge.net/user/settings" target="_blank">vjudge.net/user/settings</a>).
+        is linked in <a href="https://vjudge.net/user/settings" target="_blank">vjudge.net/user/settings</a>.
       </p>
       <label class="field-label">VJudge Username</label>
-      <input id="cfHandle" class="input-field" placeholder="your_vjudge_username">
+      <input id="vjHandle" class="input-field" placeholder="your_vjudge_username">
       <label class="field-label" style="margin-top:12px">Password</label>
-      <input id="cfPassword" class="input-field" type="password" placeholder="••••••••">
+      <input id="vjPassword" class="input-field" type="password" placeholder="••••••••">
       <button id="modalLoginBtn" class="btn-full btn-submit" style="margin-top:20px" onclick="doLogin()">
         Connect
       </button>

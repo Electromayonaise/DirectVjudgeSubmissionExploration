@@ -4,7 +4,7 @@ import bodyParser from "body-parser"
 import config from "./config/config.js"
 
 import { fetchProblem } from "./services/problemService.js"
-import { loginCF, submitCF, hasSession, clearSession, getSubmissionStatus } from "./services/cfService.js"
+import { loginCF, submitCF, hasSession, clearSession, getSubmissionStatus, getContestProblems } from "./services/cfService.js"
 
 const app = express()
 
@@ -21,7 +21,6 @@ app.get("/api/problem/:problemId", async (req, res) => {
   }
 })
 
-// Lenguajes soportados — IDs de Codeforces (el servicio los mapea a IDs de VJudge internamente)
 app.get("/api/languages", (req, res) => {
   res.json([
     { id: 54, name: "GNU C++17" },
@@ -32,7 +31,6 @@ app.get("/api/languages", (req, res) => {
   ])
 })
 
-// Login con credenciales de VJudge (usuario pasa su user/pass de vjudge.net)
 app.post("/api/login", async (req, res) => {
   try {
     const { handle, password } = req.body
@@ -65,12 +63,20 @@ app.post("/api/submit", async (req, res) => {
   }
 })
 
-// Polling de veredicto — ahora consulta VJudge en lugar de la API pública de CF
 app.get("/api/verdict/:submissionId", async (req, res) => {
   try {
-    const verdict = await getSubmissionStatus(req.params.submissionId)
-    res.json(verdict)
+    res.json(await getSubmissionStatus(req.params.submissionId))
   } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Contest de VJudge — no requiere auth, lee dataJson del HTML público
+app.get("/api/contest/:contestId", async (req, res) => {
+  try {
+    res.json(await getContestProblems(req.params.contestId))
+  } catch (err) {
+    console.error(err.message)
     res.status(500).json({ error: err.message })
   }
 })
