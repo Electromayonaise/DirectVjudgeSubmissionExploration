@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CF Viability Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$$$','$$$']],
+    displayMath: [['$$$$$$','$$$$$$']],
+    processEscapes: true
+  },
+  options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] },
+  startup: { typeset: false }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="logo">CF <span class="logo-accent">Viability Test</span></span>
+  </div>
+  <div class="topbar-right">
+    <div id="userChip" class="user-chip hidden">
+      <span class="user-dot"></span>
+      <span id="userHandle"></span>
+      <button class="chip-logout" onclick="logout()" title="Log out">&#x2715;</button>
+    </div>
+    <button id="loginBtn" class="btn-login" onclick="startLogin()">Connect VJudge</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- LEFT: problem viewer -->
+  <section class="panel panel-problem">
+    <div class="search-row">
+      <input id="problemInput" class="input-mono" placeholder="Problem ID — e.g. 1213D2">
+      <button class="btn-primary" onclick="loadProblem()">Load</button>
+    </div>
+    <div id="problemContainer" class="problem-area">
+      <div class="empty-state">
+        <div class="empty-icon">&#9633;</div>
+        <p>Enter a problem ID to get started</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: submit panel with tab switcher -->
+  <aside class="panel panel-submit">
+
+    <div class="tab-bar">
+      <button class="tab active" id="tab-editor" onclick="switchTab('editor')">Editor</button>
+      <button class="tab" id="tab-result" onclick="switchTab('result')" disabled>Result</button>
+    </div>
+
+    <!-- Editor tab -->
+    <div id="pane-editor" class="tab-pane active">
+      <div class="submit-block">
+        <label class="field-label">Language</label>
+        <select id="language" class="select-field"></select>
+      </div>
+      <div class="submit-block grow">
+        <label class="field-label">Solution</label>
+        <textarea id="code" class="code-editor" placeholder="// paste your solution here"></textarea>
+      </div>
+      <div id="submitArea">
+        <button id="connectBtn" class="btn-full btn-connect" onclick="startLogin()">
+          <span class="btn-icon">&#9651;</span> Connect VJudge to Submit
+        </button>
+        <button id="submitBtn" class="btn-full btn-submit hidden" onclick="submitSolution()">
+          Submit Solution
+        </button>
+      </div>
+      <div id="statusBanner" class="status-banner hidden"></div>
+    </div>
+
+    <!-- Result tab -->
+    <div id="pane-result" class="tab-pane hidden">
+      <div id="verdictCard" class="verdict-card">
+        <div class="verdict-spinner">
+          <div class="spinner"></div>
+          <span>Judging...</span>
+        </div>
+      </div>
+      <div id="verdictMeta" class="verdict-meta hidden"></div>
+      <a id="cfLink" class="cf-link hidden" target="_blank">View on VJudge ↗</a>
+    </div>
+
+  </aside>
+
+</main>
+
+<!-- Login modal -->
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Connect VJudge Account</span>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">
+        Enter your <strong>VJudge</strong> credentials. Make sure your Codeforces account
+        is linked in your VJudge settings (<a href="https://vjudge.net/user/settings" target="_blank">vjudge.net/user/settings</a>).
+      </p>
+      <label class="field-label">VJudge Username</label>
+      <input id="cfHandle" class="input-field" placeholder="your_vjudge_username">
+      <label class="field-label" style="margin-top:12px">Password</label>
+      <input id="cfPassword" class="input-field" type="password" placeholder="••••••••">
+      <button id="modalLoginBtn" class="btn-full btn-submit" style="margin-top:20px" onclick="doLogin()">
+        Connect
+      </button>
+      <div id="modalStatus" class="modal-status hidden"></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
