@@ -52,9 +52,9 @@ app.delete("/api/session/:handle", (req, res) => {
 
 app.post("/api/submit", async (req, res) => {
   try {
-    const { handle, contestId, index, code, languageId } = req.body
+    const { handle, contestId, index, code, languageId, vjContestId, vjIndex } = req.body
     if (!handle) return res.status(400).json({ error: "handle required" })
-    const result = await submitCF(contestId, index, code, languageId, handle)
+    const result = await submitCF(contestId, index, code, languageId, handle, vjContestId, vjIndex)
     res.json({ ...result, success: true })
   } catch (err) {
     console.error(err)
@@ -71,7 +71,6 @@ app.get("/api/verdict/:submissionId", async (req, res) => {
   }
 })
 
-// Contest de VJudge — no requiere auth, lee dataJson del HTML público
 app.get("/api/contest/:contestId", async (req, res) => {
   try {
     res.json(await getContestProblems(req.params.contestId))

@@ -1,3 +1,14 @@
+// ── Session persistence ───────────────────────────────────
+function saveHandleLocally(handle) {
+  try { localStorage.setItem("vj_handle", handle) } catch (_) {}
+}
+function loadHandleLocally() {
+  try { return localStorage.getItem("vj_handle") } catch (_) { return null }
+}
+function clearHandleLocally() {
+  try { localStorage.removeItem("vj_handle") } catch (_) {}
+}
+
 // ── State ────────────────────────────────────────────────
 let currentHandle = null
 let pollInterval  = null
@@ -35,6 +46,7 @@ function setModalStatus(msg, type = "info") {
 // ── Session UI ────────────────────────────────────────────
 function setLoggedIn(handle) {
   currentHandle = handle
+  saveHandleLocally(handle)
   document.getElementById("userHandle").textContent = handle
   document.getElementById("userChip").classList.remove("hidden")
   document.getElementById("loginBtn").classList.add("hidden")
@@ -102,6 +114,7 @@ async function doLogin() {
 
 async function logout() {
   if (currentHandle) await fetch(`/api/session/${currentHandle}`, { method: "DELETE" }).catch(() => {})
+  clearHandleLocally()
   setLoggedOut()
 }
 
@@ -109,7 +122,6 @@ async function logout() {
 async function loadInput() {
   const raw = document.getElementById("problemInput").value.trim()
   if (!raw) return
-
   if (/^\d+$/.test(raw)) {
     await loadContest(raw)
   } else {
@@ -131,7 +143,7 @@ async function loadProblem(problemId) {
     const data = await problemRes.json()
     if (!problemRes.ok) throw new Error(data.error || "Failed to load problem")
 
-    activeProblem = { contestId: data.contestId, index: data.index }
+    activeProblem = { ...activeProblem, contestId: data.contestId, index: data.index }
 
     const tagsHtml = data.tags.map(t => `<span class="tag">${t}</span>`).join("")
     container.innerHTML = `
@@ -159,7 +171,7 @@ async function loadContest(contestId) {
   currentMode   = "contest"
   activeProblem = null
 
-  const contestPanel    = document.getElementById("contestPanel")
+  const contestPanel     = document.getElementById("contestPanel")
   const problemContainer = document.getElementById("problemContainer")
 
   contestPanel.classList.remove("hidden")
@@ -172,7 +184,6 @@ async function loadContest(contestId) {
     const res  = await fetch(`/api/contest/${contestId}`)
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || "Failed to load contest")
-
     contestData = data
     renderContestPanel(data)
   } catch (err) {
@@ -182,14 +193,16 @@ async function loadContest(contestId) {
 
 function renderContestPanel(data) {
   const panel = document.getElementById("contestPanel")
+  // Guardamos los datos del contest en un atributo del panel para acceder desde selectContestProblem
+  panel.dataset.contestId = String(data.id)
   panel.innerHTML = `
     <div class="contest-header">
       <div class="contest-title">${data.title}</div>
       <div class="contest-subtitle">VJudge Contest #${data.id} · ${data.problems.length} problems</div>
     </div>
     <div class="contest-problem-list">
-      ${data.problems.map(p => `
-        <button class="contest-problem-row" onclick="selectContestProblem(event, '${p.vjCode}')">
+      ${data.problems.map((p, i) => `
+        <button class="contest-problem-row" data-vjcode="${p.vjCode || ''}" data-vjindex="${p.index}" onclick="selectContestProblem(event)">
           <span class="contest-problem-index">${p.index}</span>
           <span class="contest-problem-title">${p.title}</span>
           <span class="contest-problem-oj">${p.oj}</span>
@@ -199,21 +212,39 @@ function renderContestPanel(data) {
   `
 }
 
-async function selectContestProblem(e, vjCode) {
+async function selectContestProblem(e) {
+  const btn        = e.currentTarget
+  const vjCode     = btn.dataset.vjcode
+  const vjIndex    = btn.dataset.vjindex
+  const vjContestId = document.getElementById("contestPanel").dataset.contestId
+
   document.querySelectorAll(".contest-problem-row").forEach(r => r.classList.remove("selected"))
-  e.currentTarget.classList.add("selected")
+  btn.classList.add("selected")
+
+  if (!vjCode) {
+    activeProblem = null
+    document.getElementById("problemContainer").innerHTML = `
+      <div class="empty-state"><p style="color:var(--muted)">No preview available for this problem.</p></div>
+    `
+    return
+  }
 
   const match = vjCode.match(/CodeForces-(\d+)([A-Z0-9]+)/i)
   if (match) {
-    activeProblem = { contestId: match[1], index: match[2] }
+    activeProblem = {
+      contestId:   match[1],
+      index:       match[2],
+      vjContestId: vjContestId || null,
+      vjIndex:     vjIndex     || null,
+    }
     await loadProblem(`${match[1]}${match[2]}`)
   } else {
+    activeProblem = null
     document.getElementById("problemContainer").innerHTML = `
       <div class="empty-state"><p style="color:var(--muted)">Preview only available for Codeforces problems.</p></div>
     `
   }
 }
-
 // ── Languages ─────────────────────────────────────────────
 async function loadLanguages() {
   const res   = await fetch("/api/languages")
@@ -272,7 +303,7 @@ function renderVerdict(data) {
   if (data.timeMs != null || data.memoryKb != null) {
     meta.classList.remove("hidden")
     meta.innerHTML = `
-      ${data.timeMs  != null ? `<div class="verdict-stat"><div class="verdict-stat-label">Time</div><div class="verdict-stat-value">${data.timeMs} ms</div></div>` : ""}
+      ${data.timeMs   != null ? `<div class="verdict-stat"><div class="verdict-stat-label">Time</div><div class="verdict-stat-value">${data.timeMs} ms</div></div>` : ""}
       ${data.memoryKb != null ? `<div class="verdict-stat"><div class="verdict-stat-label">Memory</div><div class="verdict-stat-value">${data.memoryKb} KB</div></div>` : ""}
     `
   }
@@ -310,7 +341,15 @@ async function submitSolution() {
     const res = await fetch("/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ handle: currentHandle, contestId, index, code, languageId })
+      body: JSON.stringify({
+        handle:      currentHandle,
+        contestId,
+        index,
+        code,
+        languageId,
+        vjContestId: activeProblem.vjContestId || null,
+        vjIndex:     activeProblem.vjIndex     || null,
+      })
     })
     const data = await res.json()
 
@@ -353,7 +392,25 @@ function renderSubmitSteps(steps) {
   `).join("")
 }
 
-// ── Keyboard shortcuts ────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────
+async function init() {
+  await loadLanguages()
+  const saved = loadHandleLocally()
+  if (saved) {
+    try {
+      const res  = await fetch(`/api/session/${saved}`)
+      const data = await res.json()
+      if (data.active) {
+        setLoggedIn(saved)
+        setStatus(`Session restored — submitting as ${saved}`, "ok")
+        setTimeout(clearStatus, 3000)
+      } else {
+        clearHandleLocally()
+      }
+    } catch (_) { clearHandleLocally() }
+  }
+}
+
 document.getElementById("problemInput").addEventListener("keydown", e => {
   if (e.key === "Enter") loadInput()
 })
@@ -364,4 +421,4 @@ document.getElementById("vjPassword").addEventListener("keydown", e => {
   if (e.key === "Enter") doLogin()
 })
 
-loadLanguages()
+init()

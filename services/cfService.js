@@ -24,25 +24,18 @@ function decrypt(text) {
   return Buffer.concat([decipher.update(Buffer.from(encHex, "hex")), decipher.final()]).toString("utf8")
 }
 
-function sessionPath(handle) {
-  return path.join(SESSIONS_DIR, `${handle.toLowerCase()}.json`)
-}
+function sessionPath(handle) { return path.join(SESSIONS_DIR, `${handle.toLowerCase()}.json`) }
 
 function saveSession(handle, cookies) {
-  const payload = { cookies, savedAt: Date.now() }
-  writeFileSync(sessionPath(handle), encrypt(JSON.stringify(payload)), "utf8")
+  writeFileSync(sessionPath(handle), encrypt(JSON.stringify({ cookies, savedAt: Date.now() })), "utf8")
   console.log(`[VJ] Session saved for ${handle} (${cookies.length} cookies).`)
 }
 
 function loadSession(handle) {
   const p = sessionPath(handle)
   if (!existsSync(p)) return null
-  try {
-    return JSON.parse(decrypt(readFileSync(p, "utf8"))).cookies
-  } catch (err) {
-    console.warn(`[VJ] Could not read session for ${handle}:`, err.message)
-    return null
-  }
+  try { return JSON.parse(decrypt(readFileSync(p, "utf8"))).cookies }
+  catch (err) { console.warn(`[VJ] Could not read session for ${handle}:`, err.message); return null }
 }
 
 export function hasSession(handle) { return existsSync(sessionPath(handle)) }
@@ -53,13 +46,10 @@ export function clearSession(handle) {
   return false
 }
 
-function cookieHeader(cookies) {
-  return cookies.map(c => `${c.name}=${c.value}`).join("; ")
-}
+function cookieHeader(cookies) { return cookies.map(c => `${c.name}=${c.value}`).join("; ") }
 
 function parseSetCookies(headers) {
-  const raw = headers["set-cookie"] || []
-  return raw.map(line => {
+  return (headers["set-cookie"] || []).map(line => {
     const [pair] = line.split(";")
     const eq = pair.indexOf("=")
     if (eq === -1) return null
@@ -80,8 +70,7 @@ export async function loginCF(vjHandle, vjPassword) {
 
   const initRes = await axios.get("https://vjudge.net/", {
     headers: { "User-Agent": VJ_UA, "Accept": "text/html" },
-    maxRedirects: 5,
-    timeout: 15000,
+    maxRedirects: 5, timeout: 15000,
   })
   const initCookies = parseSetCookies(initRes.headers)
 
@@ -98,47 +87,36 @@ export async function loginCF(vjHandle, vjPassword) {
       "Origin": "https://vjudge.net",
       "Cookie": cookieHeader(initCookies),
     },
-    maxRedirects: 0,
-    validateStatus: s => s < 500,
-    timeout: 15000,
+    maxRedirects: 0, validateStatus: s => s < 500, timeout: 15000,
   })
 
   const body = typeof loginRes.data === "string" ? loginRes.data : JSON.stringify(loginRes.data)
   console.log(`[VJ] Login response: "${body}"`)
 
-  if (!body.toLowerCase().includes("success")) {
-    throw new Error("Invalid username or password.")
-  }
+  if (!body.toLowerCase().includes("success")) throw new Error("Invalid username or password.")
 
-  const loginCookies = parseSetCookies(loginRes.headers)
-  const merged = mergeCookies(initCookies, loginCookies)
+  const merged = mergeCookies(initCookies, parseSetCookies(loginRes.headers))
 
   const checkRes = await axios.get("https://vjudge.net/user/checkLogInStatus", {
-    headers: {
-      "User-Agent": VJ_UA,
-      "X-Requested-With": "XMLHttpRequest",
-      "Cookie": cookieHeader(merged),
-    },
-    validateStatus: s => s < 500,
-    timeout: 10000,
+    headers: { "User-Agent": VJ_UA, "X-Requested-With": "XMLHttpRequest", "Cookie": cookieHeader(merged) },
+    validateStatus: s => s < 500, timeout: 10000,
   })
 
   const checkBody = checkRes.data
   console.log(`[VJ] checkLogInStatus:`, checkBody)
 
-  const authed = checkBody && checkBody !== false && checkBody !== "false" && checkBody !== ""
-  if (!authed) throw new Error("Invalid username or password.")
+  if (!checkBody || checkBody === false || checkBody === "false" || checkBody === "") {
+    throw new Error("Invalid username or password.")
+  }
 
   saveSession(vjHandle, merged)
   console.log(`[VJ] Login verified for ${vjHandle}.`)
   return { success: true, cookieCount: merged.length }
 }
 
-const VJ_LANGUAGE_MAP = {
-  54: 54, 74: 80, 71: 70, 73: 72, 60: 60, 65: 65,
-}
+const VJ_LANGUAGE_MAP = { 54: 54, 74: 80, 71: 70, 73: 72, 60: 60, 65: 65 }
 
-export async function submitCF(contestId, index, code, languageId, handle) {
+export async function submitCF(contestId, index, code, languageId, handle, vjContestId, vjIndex) {
   const cookies = loadSession(handle)
   if (!cookies) throw new Error(`No VJudge session for ${handle}. Please log in first.`)
 
@@ -146,8 +124,10 @@ export async function submitCF(contestId, index, code, languageId, handle) {
   const vjLang = VJ_LANGUAGE_MAP[Number(languageId)] ?? languageId
   const steps = []
 
+  console.log("Submitting problemCode:", problemCode)
+  
   steps.push({ type: "info", text: `Submitting as ${handle}...` })
-  const runId = await doSubmit(problemCode, vjLang, code, cookies, 0)
+  const runId = await doSubmit(problemCode, vjLang, code, cookies, 0, vjContestId, vjIndex)
 
   steps.push({ type: "info", text: "Checking for rating restrictions..." })
   const challenge = await pollForChallenge(runId)
@@ -163,35 +143,57 @@ export async function submitCF(contestId, index, code, languageId, handle) {
   }
 
   steps.push({ type: "info", text: "Retrying with shared club account..." })
-  const clubRunId = await doSubmit(problemCode, vjLang, code, clubCookies, 4)
+  const clubRunId = await doSubmit(problemCode, vjLang, code, clubCookies, 4, vjContestId, vjIndex)
   steps.push({ type: "ok", text: "Submitted via shared account successfully." })
   return { submissionId: String(clubRunId), usedClubAccount: true, steps }
 }
 
-async function doSubmit(problemCode, vjLang, code, cookies, method) {
+async function doSubmit(problemCode, vjLang, code, cookies, method, vjContestId, vjIndex) {
   const params = new URLSearchParams()
-  params.append("method", String(method))
   params.append("language", String(vjLang))
   params.append("open", "1")
   params.append("source", code)
 
-  const res = await axios.post(`https://vjudge.net/problem/submit/${problemCode}`, params.toString(), {
+  let url, referer
+  if (vjContestId && vjIndex) {
+    url     = `https://vjudge.net/contest/submit/${vjContestId}/${vjIndex}`
+    referer = `https://vjudge.net/contest/${vjContestId}`
+  } else {
+    params.append("method", String(method))
+    url     = `https://vjudge.net/problem/submit/${problemCode}`
+    referer = `https://vjudge.net/problem/${problemCode}`
+  }
+
+  const res = await axios.post(url, params.toString(), {
     headers: {
       "User-Agent": VJ_UA,
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
       "X-Requested-With": "XMLHttpRequest",
-      "Referer": `https://vjudge.net/problem/${problemCode}`,
+      "Referer": referer,
       "Origin": "https://vjudge.net",
       "Accept": "*/*",
       "Cookie": cookieHeader(cookies),
     },
-    validateStatus: s => s < 500,
+    validateStatus: () => true,
     timeout: 20000,
   })
 
-  if (res.status === 401 || res.status === 403) throw new Error("VJudge session expired. Please log in again.")
+  console.log(`[VJ] doSubmit ${url} → status=${res.status} isHTML=${typeof res.data === 'string' && res.data.includes('<!DOCTYPE')}`)
+
+  if (res.status === 401 || res.status === 403) {
+    throw new Error("VJudge session expired. Please log in again.")
+  }
 
   const data = res.data
+
+  if (typeof data === "string" && data.includes("<!DOCTYPE")) {
+    if (vjContestId && vjIndex) {
+      console.log(`[VJ] Contest submit returned HTML, falling back to global problem endpoint...`)
+      return doSubmit(problemCode, vjLang, code, cookies, method, null, null)
+    }
+    throw new Error("VJudge returned an error page. Check your session or problem ID.")
+  }
+
   if (data?.runId) return data.runId
 
   const msg = data?.error || (typeof data === "string" ? data : JSON.stringify(data))
@@ -208,8 +210,7 @@ async function pollForChallenge(runId) {
     try {
       const res = await axios.get(`https://vjudge.net/solution/data/${runId}`, {
         headers: { "User-Agent": VJ_UA, "Accept": "application/json" },
-        timeout: 8000,
-        validateStatus: s => s < 500,
+        timeout: 8000, validateStatus: s => s < 500,
       })
       const d = res.data
       const statusCanonical = d?.statusCanonical || d?.status || ""
@@ -219,9 +220,7 @@ async function pollForChallenge(runId) {
       const isPending = processing || !statusCanonical ||
         statusCanonical === "Pending" || statusCanonical === "PENDING" || statusCanonical === "Judging"
       if (!isPending) return false
-    } catch (e) {
-      console.warn(`[VJ] pollForChallenge error: ${e.message}`)
-    }
+    } catch (e) { console.warn(`[VJ] pollForChallenge error: ${e.message}`) }
   }
   return false
 }
@@ -248,13 +247,10 @@ async function getClubSession() {
 export async function getSubmissionStatus(submissionId) {
   const res = await axios.get(`https://vjudge.net/solution/data/${submissionId}`, {
     headers: { "User-Agent": VJ_UA, "Accept": "application/json", "Referer": "https://vjudge.net/" },
-    timeout: 10000,
-    validateStatus: s => s < 500,
+    timeout: 10000, validateStatus: s => s < 500,
   })
 
-  if (res.status === 404) {
-    return { id: submissionId, verdict: "PENDING", verdictText: "Waiting for judge...", judging: true }
-  }
+  if (res.status === 404) return { id: submissionId, verdict: "PENDING", verdictText: "Waiting for judge...", judging: true }
 
   const d = res.data
   console.log(`[VJ] solution/data/${submissionId}:`, JSON.stringify(d))
@@ -268,23 +264,23 @@ export async function getSubmissionStatus(submissionId) {
     statusCanonical === "Judging"
 
   const verdictMap = {
-    "Accepted":             { verdict: "OK",        text: "Accepted",              color: "green" },
-    "AC":                   { verdict: "OK",        text: "Accepted",              color: "green" },
-    "Wrong Answer":         { verdict: "WA",         text: "Wrong Answer",          color: "red"   },
-    "WA":                   { verdict: "WA",         text: "Wrong Answer",          color: "red"   },
-    "Time Limit Exceeded":  { verdict: "TLE",        text: "Time Limit Exceeded",   color: "red"   },
-    "TLE":                  { verdict: "TLE",        text: "Time Limit Exceeded",   color: "red"   },
-    "Memory Limit Exceeded":{ verdict: "MLE",        text: "Memory Limit Exceeded", color: "red"   },
-    "MLE":                  { verdict: "MLE",        text: "Memory Limit Exceeded", color: "red"   },
-    "Runtime Error":        { verdict: "RE",         text: "Runtime Error",         color: "red"   },
-    "RE":                   { verdict: "RE",         text: "Runtime Error",         color: "red"   },
-    "Compilation Error":    { verdict: "CE",         text: "Compilation Error",     color: "red"   },
-    "CE":                   { verdict: "CE",         text: "Compilation Error",     color: "red"   },
-    "Pending":              { verdict: "PENDING",    text: "Pending...",            color: "amber" },
-    "PENDING":              { verdict: "PENDING",    text: "Pending...",            color: "amber" },
-    "Judging":              { verdict: "JUDGING",    text: "Judging...",            color: "amber" },
-    "Challenge Encountered":{ verdict: "CHALLENGE",  text: "Challenge Encountered", color: "amber" },
-    "SUBMIT_FAILED_TEMP":   { verdict: "FAILED",     text: "Submit failed (temp)",  color: "red"   },
+    "Accepted":             { verdict: "OK",       text: "Accepted",              color: "green" },
+    "AC":                   { verdict: "OK",       text: "Accepted",              color: "green" },
+    "Wrong Answer":         { verdict: "WA",        text: "Wrong Answer",          color: "red"   },
+    "WA":                   { verdict: "WA",        text: "Wrong Answer",          color: "red"   },
+    "Time Limit Exceeded":  { verdict: "TLE",       text: "Time Limit Exceeded",   color: "red"   },
+    "TLE":                  { verdict: "TLE",       text: "Time Limit Exceeded",   color: "red"   },
+    "Memory Limit Exceeded":{ verdict: "MLE",       text: "Memory Limit Exceeded", color: "red"   },
+    "MLE":                  { verdict: "MLE",       text: "Memory Limit Exceeded", color: "red"   },
+    "Runtime Error":        { verdict: "RE",        text: "Runtime Error",         color: "red"   },
+    "RE":                   { verdict: "RE",        text: "Runtime Error",         color: "red"   },
+    "Compilation Error":    { verdict: "CE",        text: "Compilation Error",     color: "red"   },
+    "CE":                   { verdict: "CE",        text: "Compilation Error",     color: "red"   },
+    "Pending":              { verdict: "PENDING",   text: "Pending...",            color: "amber" },
+    "PENDING":              { verdict: "PENDING",   text: "Pending...",            color: "amber" },
+    "Judging":              { verdict: "JUDGING",   text: "Judging...",            color: "amber" },
+    "Challenge Encountered":{ verdict: "CHALLENGE", text: "Challenge Encountered", color: "amber" },
+    "SUBMIT_FAILED_TEMP":   { verdict: "FAILED",    text: "Submit failed (temp)",  color: "red"   },
   }
 
   const mapped = verdictMap[statusCanonical] || {
@@ -294,17 +290,14 @@ export async function getSubmissionStatus(submissionId) {
   }
 
   return {
-    id:          submissionId,
-    verdict:     mapped.verdict,
-    verdictText: mapped.text,
-    color:       mapped.color,
-    judging,
+    id: submissionId, verdict: mapped.verdict, verdictText: mapped.text,
+    color: mapped.color, judging,
     passedTests: d?.passedTestCount ?? null,
-    timeMs:      d?.time   != null ? Number(d.time)                      : null,
-    memoryKb:    d?.memory != null ? Math.round(Number(d.memory) / 1024) : null,
-    language:    d?.language ?? null,
-    problem:     d?.problemId ?? null,
-    _raw:        d,
+    timeMs:   d?.time   != null ? Number(d.time)                      : null,
+    memoryKb: d?.memory != null ? Math.round(Number(d.memory) / 1024) : null,
+    language: d?.language ?? null,
+    problem:  d?.problemId ?? null,
+    _raw: d,
   }
 }
 
@@ -315,8 +308,7 @@ export async function getContestProblems(contestId) {
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9",
     },
-    timeout: 15000,
-    validateStatus: () => true,
+    timeout: 15000, validateStatus: () => true,
   })
 
   console.log(`[VJ] contest/${contestId} status=${res.status}`)
@@ -341,8 +333,7 @@ export async function getContestProblems(contestId) {
   if (data.problems.some(p => p.oj === "CodeForces")) {
     try {
       const cfRes = await axios.get("https://codeforces.com/api/problemset.problems", {
-        timeout: 10000,
-        validateStatus: s => s < 500,
+        timeout: 10000, validateStatus: s => s < 500,
       })
       if (cfRes.data?.status === "OK") {
         for (const p of cfRes.data.result.problems) {
