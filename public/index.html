@@ -103,7 +103,7 @@ window.MathJax = {
 
 </main>
 
-<!-- Login modal -->
+<!-- VJudge Login modal -->
 <div id="loginModal" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal-header">
@@ -123,6 +123,35 @@ window.MathJax = {
         Connect
       </button>
       <div id="modalStatus" class="modal-status hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CF Cookie fallback modal -->
+<div id="cfCookieModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Codeforces Cookie Required</span>
+      <button class="modal-close" onclick="closeCFCookieModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="cfCookieError" class="modal-status error" style="margin-bottom:16px"></div>
+      <p class="modal-desc">
+        The VJudge bot account is unavailable for this problem. You can submit using your own
+        Codeforces session instead.
+      </p>
+      <p class="modal-desc" style="margin-top:8px">
+        <strong>How to get your JSESSIONID:</strong><br>
+        1. Log in to <a href="https://codeforces.com" target="_blank">codeforces.com</a><br>
+        2. Open DevTools → Application → Cookies → codeforces.com<br>
+        3. Copy the value of <code>JSESSIONID</code>
+      </p>
+      <label class="field-label" style="margin-top:16px">Codeforces JSESSIONID cookie value</label>
+      <input id="cfJsessionId" class="input-field input-mono" placeholder="Paste JSESSIONID value here">
+      <button id="cfCookieSubmitBtn" class="btn-full btn-submit" style="margin-top:20px" onclick="submitWithCFCookie()">
+        Verify &amp; Submit
+      </button>
+      <div id="cfCookieStatus" class="modal-status hidden" style="margin-top:12px"></div>
     </div>
   </div>
 </div>

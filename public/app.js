@@ -10,11 +10,13 @@ function clearHandleLocally() {
 }
 
 // ── State ────────────────────────────────────────────────
-let currentHandle = null
-let pollInterval  = null
-let currentMode   = "problem"
-let contestData   = null
-let activeProblem = null
+let currentHandle   = null
+let pollInterval    = null
+let currentMode     = "problem"
+let contestData     = null
+let activeProblem   = null
+// Pending submit payload reused when the user provides their CF cookie
+let pendingSubmit   = null
 
 // ── Tabs ─────────────────────────────────────────────────
 function switchTab(tab) {
@@ -63,7 +65,7 @@ function setLoggedOut() {
   clearStatus()
 }
 
-// ── Modal ─────────────────────────────────────────────────
+// ── VJudge Login Modal ────────────────────────────────────
 function startLogin() {
   document.getElementById("loginModal").classList.remove("hidden")
   document.getElementById("vjHandle").focus()
@@ -116,6 +118,90 @@ async function logout() {
   if (currentHandle) await fetch(`/api/session/${currentHandle}`, { method: "DELETE" }).catch(() => {})
   clearHandleLocally()
   setLoggedOut()
+}
+
+// ── CF Cookie Modal ───────────────────────────────────────
+
+function openCFCookieModal(botErrorMessage) {
+  document.getElementById("cfCookieError").textContent = botErrorMessage
+  document.getElementById("cfCookieStatus").classList.add("hidden")
+  document.getElementById("cfJsessionId").value = ""
+  document.getElementById("cfCookieSubmitBtn").disabled = false
+  document.getElementById("cfCookieSubmitBtn").textContent = "Verify & Submit"
+  document.getElementById("cfCookieModal").classList.remove("hidden")
+  setTimeout(() => document.getElementById("cfJsessionId").focus(), 100)
+}
+
+function closeCFCookieModal() {
+  document.getElementById("cfCookieModal").classList.add("hidden")
+  pendingSubmit = null
+}
+
+function setCFCookieStatus(msg, type = "info") {
+  const el = document.getElementById("cfCookieStatus")
+  el.textContent = msg
+  el.className = `modal-status ${type}`
+  el.classList.remove("hidden")
+}
+
+async function submitWithCFCookie() {
+  if (!pendingSubmit) return
+
+  const cfJsessionId = document.getElementById("cfJsessionId").value.trim()
+  if (!cfJsessionId) {
+    setCFCookieStatus("Please paste your JSESSIONID value.", "error")
+    return
+  }
+
+  const btn = document.getElementById("cfCookieSubmitBtn")
+  btn.disabled = true
+  btn.textContent = "Verifying..."
+  setCFCookieStatus("Verifying your Codeforces account...", "info")
+
+  // Reset result pane
+  document.getElementById("submitSteps").innerHTML = ""
+  document.getElementById("submitSteps").classList.remove("hidden")
+  document.getElementById("verdictCard").innerHTML = `
+    <div class="verdict-spinner"><div class="spinner"></div><span>Verifying CF account...</span></div>
+  `
+  document.getElementById("verdictMeta").classList.add("hidden")
+  document.getElementById("cfLink").classList.add("hidden")
+
+  try {
+    const res = await fetch("/api/submit/cf-cookie", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...pendingSubmit, cfJsessionId })
+    })
+    const data = await res.json()
+
+    if (data.steps?.length) renderSubmitSteps(data.steps)
+
+    if (!res.ok) {
+      setCFCookieStatus(data.error || "Submission failed.", "error")
+      btn.disabled = false
+      btn.textContent = "Verify & Submit"
+
+      document.getElementById("verdictCard").innerHTML =
+        `<div class="verdict-text red">${data.error}</div>`
+
+      if (res.status === 401) {
+        closeCFCookieModal()
+        setLoggedOut()
+        setStatus("Session expired. Please log in again.", "error")
+      }
+      return
+    }
+
+    // Success — close modal, start polling
+    closeCFCookieModal()
+    clearStatus()
+    startVerdictPolling(data.submissionId)
+  } catch (err) {
+    setCFCookieStatus("Network error: " + err.message, "error")
+    btn.disabled = false
+    btn.textContent = "Verify & Submit"
+  }
 }
 
 // ── Input detection ───────────────────────────────────────
@@ -193,7 +279,6 @@ async function loadContest(contestId) {
 
 function renderContestPanel(data) {
   const panel = document.getElementById("contestPanel")
-  // Guardamos los datos del contest en un atributo del panel para acceder desde selectContestProblem
   panel.dataset.contestId = String(data.id)
   panel.innerHTML = `
     <div class="contest-header">
@@ -213,9 +298,9 @@ function renderContestPanel(data) {
 }
 
 async function selectContestProblem(e) {
-  const btn        = e.currentTarget
-  const vjCode     = btn.dataset.vjcode
-  const vjIndex    = btn.dataset.vjindex
+  const btn         = e.currentTarget
+  const vjCode      = btn.dataset.vjcode
+  const vjIndex     = btn.dataset.vjindex
   const vjContestId = document.getElementById("contestPanel").dataset.contestId
 
   document.querySelectorAll(".contest-problem-row").forEach(r => r.classList.remove("selected"))
@@ -232,10 +317,10 @@ async function selectContestProblem(e) {
   const match = vjCode.match(/CodeForces-(\d+)([A-Z0-9]+)/i)
   if (match) {
     activeProblem = {
-      contestId:   match[1],
-      index:       match[2],
-      vjContestId: vjContestId || null,
-      vjIndex:     vjIndex     || null,
+      contestId:    match[1],
+      index:        match[2],
+      vjContestId:  vjContestId || null,
+      vjIndex:      vjIndex     || null,
     }
     await loadProblem(`${match[1]}${match[2]}`)
   } else {
@@ -245,6 +330,7 @@ async function selectContestProblem(e) {
     `
   }
 }
+
 // ── Languages ─────────────────────────────────────────────
 async function loadLanguages() {
   const res   = await fetch("/api/languages")
@@ -312,7 +398,7 @@ function renderVerdict(data) {
   link.classList.remove("hidden")
 }
 
-// ── Submit ────────────────────────────────────────────────
+// ── Submit (bot account — primary path) ───────────────────
 async function submitSolution() {
   if (!currentHandle) { startLogin(); return }
   if (!activeProblem) { setStatus("Load a problem first.", "error"); return }
@@ -337,19 +423,22 @@ async function submitSolution() {
   document.getElementById("submitSteps").innerHTML = ""
   document.getElementById("submitSteps").classList.remove("hidden")
 
+  // Save full payload so we can reuse it in the cookie fallback
+  pendingSubmit = {
+    handle:      currentHandle,
+    contestId,
+    index,
+    code,
+    languageId,
+    vjContestId: activeProblem.vjContestId || null,
+    vjIndex:     activeProblem.vjIndex     || null,
+  }
+
   try {
     const res = await fetch("/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        handle:      currentHandle,
-        contestId,
-        index,
-        code,
-        languageId,
-        vjContestId: activeProblem.vjContestId || null,
-        vjIndex:     activeProblem.vjIndex     || null,
-      })
+      body: JSON.stringify(pendingSubmit)
     })
     const data = await res.json()
 
@@ -359,9 +448,21 @@ async function submitSolution() {
       if (res.status === 401) {
         setLoggedOut()
         setStatus("Session expired. Please log in again.", "error")
+        pendingSubmit = null
+
+      } else if (res.status === 422 && data.requiresCookieAuth) {
+        // Bot account rejected — ask user for CF cookie
+        setStatus("VJudge bot unavailable — enter your CF cookie to continue.", "warn")
+        document.getElementById("verdictCard").innerHTML = `
+          <div class="verdict-text amber">Bot account unavailable</div>
+          <div class="verdict-id" style="margin-top:8px">Enter your CF session cookie to submit directly.</div>
+        `
+        openCFCookieModal(data.error)
+
       } else {
         setStatus("Error: " + data.error, "error")
         document.getElementById("verdictCard").innerHTML = `<div class="verdict-text red">${data.error}</div>`
+        pendingSubmit = null
       }
       return
     }
@@ -369,13 +470,16 @@ async function submitSolution() {
     if (data.challengeEncountered) {
       document.getElementById("verdictCard").innerHTML = `<div class="verdict-text red">Submit blocked</div>`
       setStatus("Cannot submit — see details in Result tab.", "error")
+      pendingSubmit = null
       return
     }
 
+    pendingSubmit = null
     clearStatus()
     startVerdictPolling(data.submissionId)
   } catch (err) {
     setStatus("Network error: " + err.message, "error")
+    pendingSubmit = null
   } finally {
     btn.disabled = false
     btn.textContent = "Submit Solution"
@@ -417,8 +521,14 @@ document.getElementById("problemInput").addEventListener("keydown", e => {
 document.getElementById("loginModal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeModal()
 })
+document.getElementById("cfCookieModal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeCFCookieModal()
+})
 document.getElementById("vjPassword").addEventListener("keydown", e => {
   if (e.key === "Enter") doLogin()
+})
+document.getElementById("cfJsessionId").addEventListener("keydown", e => {
+  if (e.key === "Enter") submitWithCFCookie()
 })
 
 init()
