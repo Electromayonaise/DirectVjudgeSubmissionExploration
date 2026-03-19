@@ -16,8 +16,10 @@ export class BotAccountError extends Error {
 }
 
 /**
- * Primary submit path: uses the VJudge bot account (method=0).
- * If VJudge rejects bot account for this OJ, throws BotAccountError.
+ * Primary submit path.
+ * - Contest submit (vjContestId + vjIndex present): uses method=1 (user's linked CF account on VJudge).
+ *   VJudge requires method=1 for contest endpoints — the bot account (method=0) is rejected there.
+ * - Global problem submit: uses method=0 (VJudge bot account), with rating-challenge fallback.
  */
 export async function submitCF(contestId, index, code, languageId, handle, vjContestId, vjIndex) {
   const cookies = loadSession(handle)
@@ -27,10 +29,18 @@ export async function submitCF(contestId, index, code, languageId, handle, vjCon
   const vjLang = VJ_LANGUAGE_MAP[Number(languageId)] ?? languageId
   const steps = []
 
-  console.log("[VJ] submitCF problemCode:", problemCode)
+  console.log("[VJ] submitCF problemCode:", problemCode, vjContestId ? `(contest ${vjContestId}/${vjIndex})` : "(global)")
   steps.push({ type: "info", text: `Submitting as ${handle}...` })
 
-  const runId = await doSubmit(problemCode, vjLang, code, cookies, 0, vjContestId, vjIndex)
+  // ── Contest path: VJudge requires method=1 for contest endpoints ──────────
+  if (vjContestId && vjIndex) {
+    const runId = await doSubmit(problemCode, vjLang, code, cookies, 1, vjContestId, vjIndex)
+    steps.push({ type: "ok", text: "Submitted to contest successfully." })
+    return { submissionId: String(runId), steps }
+  }
+
+  // ── Global problem path: bot account (method=0) + challenge check ─────────
+  const runId = await doSubmit(problemCode, vjLang, code, cookies, 0, null, null)
 
   steps.push({ type: "info", text: "Checking for rating restrictions..." })
   const challenge = await pollForChallenge(runId)
@@ -46,7 +56,7 @@ export async function submitCF(contestId, index, code, languageId, handle, vjCon
   }
 
   steps.push({ type: "info", text: "Retrying with shared club account..." })
-  const clubRunId = await doSubmit(problemCode, vjLang, code, clubCookies, 4, vjContestId, vjIndex)
+  const clubRunId = await doSubmit(problemCode, vjLang, code, clubCookies, 4, null, null)
   steps.push({ type: "ok", text: "Submitted via shared account successfully." })
   return { submissionId: String(clubRunId), usedClubAccount: true, steps }
 }
@@ -86,13 +96,15 @@ async function doSubmit(problemCode, vjLang, code, cookies, method, vjContestId,
   params.append("language", String(vjLang))
   params.append("open", "1")
   params.append("source", code)
+  params.append("method", String(method))
 
   let url, referer
   if (vjContestId && vjIndex) {
     url     = `https://vjudge.net/contest/submit/${vjContestId}/${vjIndex}`
     referer = `https://vjudge.net/contest/${vjContestId}`
+    params.append("password", "")
+    params.append("version", "3b4")
   } else {
-    params.append("method", String(method))
     url     = `https://vjudge.net/problem/submit/${problemCode}`
     referer = `https://vjudge.net/problem/${problemCode}`
   }
@@ -120,9 +132,11 @@ async function doSubmit(problemCode, vjLang, code, cookies, method, vjContestId,
   const data = res.data
 
   if (typeof data === "string" && data.includes("<!DOCTYPE")) {
+    // For contest submits, never fall back silently to the global problem endpoint.
+    // If the contest endpoint returns HTML it means the session is broken or the
+    // contest/index is wrong — surface that as an actionable error.
     if (vjContestId && vjIndex) {
-      console.log(`[VJ] Contest submit returned HTML, falling back to global problem endpoint...`)
-      return doSubmit(problemCode, vjLang, code, cookies, method, null, null)
+      throw new Error(`VJudge returned an error page for contest submit (${vjContestId}/${vjIndex}). Check your session.`)
     }
     throw new Error("VJudge returned an error page. Check your session or problem ID.")
   }

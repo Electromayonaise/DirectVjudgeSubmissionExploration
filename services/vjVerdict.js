@@ -2,23 +2,23 @@ import axios from "axios"
 import { VJ_UA } from "./vjSession.js"
 
 const VERDICT_MAP = {
-  "Accepted":             { verdict: "OK",        text: "Accepted",              color: "green" },
-  "AC":                   { verdict: "OK",        text: "Accepted",              color: "green" },
-  "Wrong Answer":         { verdict: "WA",        text: "Wrong Answer",          color: "red"   },
-  "WA":                   { verdict: "WA",        text: "Wrong Answer",          color: "red"   },
-  "Time Limit Exceeded":  { verdict: "TLE",       text: "Time Limit Exceeded",   color: "red"   },
-  "TLE":                  { verdict: "TLE",       text: "Time Limit Exceeded",   color: "red"   },
-  "Memory Limit Exceeded":{ verdict: "MLE",       text: "Memory Limit Exceeded", color: "red"   },
-  "MLE":                  { verdict: "MLE",       text: "Memory Limit Exceeded", color: "red"   },
-  "Runtime Error":        { verdict: "RE",        text: "Runtime Error",         color: "red"   },
-  "RE":                   { verdict: "RE",        text: "Runtime Error",         color: "red"   },
-  "Compilation Error":    { verdict: "CE",        text: "Compilation Error",     color: "red"   },
-  "CE":                   { verdict: "CE",        text: "Compilation Error",     color: "red"   },
-  "Pending":              { verdict: "PENDING",   text: "Pending...",            color: "amber" },
-  "PENDING":              { verdict: "PENDING",   text: "Pending...",            color: "amber" },
-  "Judging":              { verdict: "JUDGING",   text: "Judging...",            color: "amber" },
-  "Challenge Encountered":{ verdict: "CHALLENGE", text: "Challenge Encountered", color: "amber" },
-  "SUBMIT_FAILED_TEMP":   { verdict: "FAILED",    text: "Submit failed (temp)",  color: "red"   },
+  "Accepted":             { verdict: "OK",          text: "Accepted",                                                              color: "green" },
+  "AC":                   { verdict: "OK",          text: "Accepted",                                                              color: "green" },
+  "Wrong Answer":         { verdict: "WA",          text: "Wrong Answer",                                                          color: "red"   },
+  "WA":                   { verdict: "WA",          text: "Wrong Answer",                                                          color: "red"   },
+  "Time Limit Exceeded":  { verdict: "TLE",         text: "Time Limit Exceeded",                                                   color: "red"   },
+  "TLE":                  { verdict: "TLE",         text: "Time Limit Exceeded",                                                   color: "red"   },
+  "Memory Limit Exceeded":{ verdict: "MLE",         text: "Memory Limit Exceeded",                                                 color: "red"   },
+  "MLE":                  { verdict: "MLE",         text: "Memory Limit Exceeded",                                                 color: "red"   },
+  "Runtime Error":        { verdict: "RE",          text: "Runtime Error",                                                         color: "red"   },
+  "RE":                   { verdict: "RE",          text: "Runtime Error",                                                         color: "red"   },
+  "Compilation Error":    { verdict: "CE",          text: "Compilation Error",                                                     color: "red"   },
+  "CE":                   { verdict: "CE",          text: "Compilation Error",                                                     color: "red"   },
+  "Pending":              { verdict: "PENDING",     text: "Pending...",                                                            color: "amber" },
+  "PENDING":              { verdict: "PENDING",     text: "Pending...",                                                            color: "amber" },
+  "Judging":              { verdict: "JUDGING",     text: "Judging...",                                                            color: "amber" },
+  "Challenge Encountered":{ verdict: "CHALLENGE",   text: "Challenge Encountered",                                                 color: "amber" },
+  "SUBMIT_FAILED_TEMP":   { verdict: "RATING_WAIT", text: "Pending submit — Codeforces requires a rated account, do not worry, it will eventually be checked", color: "amber", isRatingWait: true },
 }
 
 export async function getSubmissionStatus(submissionId) {
@@ -38,9 +38,10 @@ export async function getSubmissionStatus(submissionId) {
   const processing      = d?.processing === true
 
   const judging = processing ||
-    statusCanonical === "Pending"  ||
-    statusCanonical === "PENDING"  ||
-    statusCanonical === "Judging"
+    statusCanonical === "Pending"           ||
+    statusCanonical === "PENDING"           ||
+    statusCanonical === "Judging"           ||
+    statusCanonical === "SUBMIT_FAILED_TEMP"
 
   const mapped = VERDICT_MAP[statusCanonical] || {
     verdict: statusCanonical || "UNKNOWN",
@@ -54,6 +55,7 @@ export async function getSubmissionStatus(submissionId) {
     verdictText: mapped.text,
     color:       mapped.color,
     judging,
+    showLink:    mapped.isRatingWait === true,
     passedTests: d?.passedTestCount ?? null,
     timeMs:      d?.time   != null ? Number(d.time)                      : null,
     memoryKb:    d?.memory != null ? Math.round(Number(d.memory) / 1024) : null,

@@ -29,13 +29,43 @@ app.get("/api/problem/:problemId", async (req, res) => {
 
 // ── Languages ─────────────────────────────────────────────────────────────────
 
+// These are VJudge's own language IDs for the CodeForces OJ — fixed, do not vary per problem.
 app.get("/api/languages", (req, res) => {
   res.json([
-    { id: 54, name: "GNU C++17" },
-    { id: 74, name: "GNU C++20" },
-    { id: 71, name: "Python 3"  },
-    { id: 73, name: "PyPy 3"    },
-    { id: 60, name: "Java 11"   },
+    { id: 54,  name: "GNU C++17 7.3.0"                },
+    { id: 89,  name: "GNU C++20 13.2 (64bit, winlibs)" },
+    { id: 91,  name: "GNU C++23 14.2 (64bit, msys2)"  },
+    { id: 43,  name: "GNU GCC C11 5.1.0"              },
+    { id: 31,  name: "Python 3.13.2"                  },
+    { id: 70,  name: "PyPy 3.10 (7.3.15, 64bit)"      },
+    { id: 40,  name: "PyPy 2.7.13 (7.3.0)"            },
+    { id: 41,  name: "PyPy 3.6.9 (7.3.0)"             },
+    { id: 21,  name: "Python 2.7.18"                  },
+    { id: 87,  name: "Java 21 64bit"                  },
+    { id: 36,  name: "Java 8 32bit"                   },
+    { id: 99,  name: "Kotlin 2.2.0"                   },
+    { id: 88,  name: "Kotlin 1.9.21"                  },
+    { id: 83,  name: "Kotlin 1.7.20"                  },
+    { id: 75,  name: "Rust 1.89.0 (2021)"             },
+    { id: 98,  name: "Rust 1.89.0 (2024)"             },
+    { id: 42,  name: "Go 1.22.2"                      },
+    { id: 34,  name: "JavaScript V8 4.8.0"            },
+    { id: 55,  name: "Node.js 15.8.0 (64bit)"         },
+    { id: 79,  name: "C# 10, .NET SDK 6.0"            },
+    { id: 77,  name: "C# .NET SDK 9"                  },
+    { id: 65,  name: "C# 8, .NET Core 3.1"            },
+    { id: 9,   name: "C# Mono 6.8"                    },
+    { id: 97,  name: "F# 9, .NET SDK 9"               },
+    { id: 12,  name: "Haskell GHC 8.10.1"             },
+    { id: 20,  name: "Scala 2.12.8"                   },
+    { id: 67,  name: "Ruby 3.2.2"                     },
+    { id: 6,   name: "PHP 8.1.7"                      },
+    { id: 13,  name: "Perl 5.20.1"                    },
+    { id: 19,  name: "OCaml 4.02.1"                   },
+    { id: 4,   name: "Free Pascal 3.2.2"               },
+    { id: 51,  name: "PascalABC.NET 3.8.3"            },
+    { id: 3,   name: "Delphi 7"                       },
+    { id: 28,  name: "D DMD32 v2.105.0"               },
   ])
 })
 

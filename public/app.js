@@ -374,10 +374,20 @@ function renderVerdict(data) {
   const meta = document.getElementById("verdictMeta")
   const link = document.getElementById("cfLink")
 
-  if (data.judging) {
+  if (data.judging && !data.showLink) {
     card.innerHTML = `
       <div class="verdict-spinner"><div class="spinner"></div><span>Judging... (test ${data.passedTests ?? 0})</span></div>
     `
+    return
+  }
+
+  if (data.judging && data.showLink) {
+    card.innerHTML = `
+      <div class="verdict-text ${data.color}">${data.verdictText}</div>
+      <div class="verdict-id">Submission #${data.id}</div>
+    `
+    link.href = `https://vjudge.net/solution/${data.id}`
+    link.classList.remove("hidden")
     return
   }
 
