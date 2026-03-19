@@ -149,7 +149,11 @@ async function doSubmit(problemCode, vjLang, code, cookies, method, vjContestId,
   if (msgStr.toLowerCase().includes("login")) throw new Error("VJudge session expired. Please log in again.")
 
   // Detect bot account rejection → signal frontend to ask for cookie
-  if (msgStr.toLowerCase().includes("bot account") || msgStr.toLowerCase().includes("doesn't support submitting")) {
+  if (
+    msgStr.toLowerCase().includes("bot account") ||
+    msgStr.toLowerCase().includes("doesn't support submitting") ||
+    msgStr.toLowerCase().includes("no verified remote account")
+  ) {
     throw new BotAccountError(`VJudge bot account not available for this OJ: ${msgStr}`)
   }
 
