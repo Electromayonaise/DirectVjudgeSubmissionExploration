@@ -6,7 +6,7 @@ Herramienta web para cargar, visualizar y enviar soluciones a problemas de Codef
 
 ## Motivación
 
-Codeforces impone restricciones de rating en ciertos problemas y contestas: usuarios sin el rango mínimo requerido no pueden enviar directamente. VJudge ofrece una bot account que actúa como intermediario, pero esta relación es frágil — Codeforces puede bloquearla sin previo aviso.
+La dificultad de automatizar un submition directamente a los endpoints de CodeForces debido a Claudfare. VJudge ofrece una bot account que actúa como intermediario, pero esta relación es frágil — Codeforces puede bloquearla sin previo aviso.
 
 Este proyecto prueba si es posible construir un flujo de envíos confiable que:
 
