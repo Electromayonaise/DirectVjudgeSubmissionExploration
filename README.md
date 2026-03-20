@@ -88,6 +88,45 @@ Polling de veredicto        Modal: "VJudge bot unavailable"
 | `POST` | `/api/submit/cf-cookie` | Envía vía cuenta CF propia del usuario |
 | `GET` | `/api/verdict/:id` | Estado de un envío |
 
+## Endpoints utilizados de VJudge
+
+### Autenticación
+
+- `https://vjudge.net/user/login` → Login del usuario en VJudge
+- `https://vjudge.net/user/checkLogInStatus` → Verificar si la sesión sigue activa
+- `https://vjudge.net/user/verifyAccount` → Verificar cuenta con JSESSIONID (para fallback)
+- `https://vjudge.net/user/unverifyAccount` → Invalidar sesión actual (para fallback)
+
+### Contests 
+
+- `https://vjudge.net/contest/${contestId}` → Carga de contestas (incluye lista de problemas)
+
+### Problemas
+
+- `https://vjudge.net/problem/${problemCode}` → Para obtener el problema que se va a enviar (necesario para obtener el `problemId` interno de VJudge, que es distinto al `problemCode` de CF)
+
+### Submissions
+
+- `https://vjudge.net/problem/submit/${problemCode}` → Envío de solución para un problema específico
+- `https://vjudge.net/contest/submit/${vjContestId}/${vjIndex}` → Envío de solución para un problema dentro de un contest 
+
+### Resultados
+
+- `https://vjudge.net/solution/${data.id}` → Página de la solución enviada 
+- `https://vjudge.net/solution/data/${runId}` → Endpoint que devuelve el estado actual del envío (veredicto, tiempo de ejecución, memoria usada, etc.)
+
+
+## Endpoints utilizados de Codeforces 
+
+### API oficial 
+- `https://codeforces.com/api/problemset.problems` → Carga de problemas (para mostrar enunciados, restricciones, etc.)
+- `https://codeforces.com/api/contest.list` → Carga de lista de concursos (para mostrar en el filtro de problemas)
+
+### Problemas 
+
+- `https://codeforces.com/problemset/problem/${contestId}/${index}` → Para obtener el enunciado del problema, restricciones, etc. (se hace desde el frontend para renderizar el enunciado con LaTeX)
+- `https://mirror.codeforces.com/contest/${contestId}/problem/${index}` → Alternativa para obtener el enunciado del problema (en caso de que el endpoint oficial falle por CORS o rate limits)
+ 
 ### Códigos de respuesta relevantes
 
 - `200` — OK
